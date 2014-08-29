@@ -1,0 +1,187 @@
+
+STARTING BENCHMARK (SETUP): ext4-sdc1-noop-ext4-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec  EPOCH: 1 / 1 THREAD: 1 / 1 SCRIPT: ./main-setup.sh sdc1 noop none SET_IOSCHED_FIRST_EPOCH ext4 FORMAT_FIRST_EPOCH na na "none" none 4096 "" ""
+
+**MSTPSH** BLOCKSIZE enabled: Will format fs with 4096 as blocksize
+BLKOPT = -b 4096
+**MSTPSH** Setting up the system...
+**MPSTPSH** Setting noop I/O scheduler...
+**MPSTPSH** noop I/O scheduler was set successfully.
+**MSTPSH** Formatting ext4 filesystem...
+mkfs.ext4 -b 4096  /dev/sdc1
+mke2fs 1.42.9 (4-Feb-2014)
+Filesystem label=
+OS type: Linux
+Block size=4096 (log=2)
+Fragment size=4096 (log=2)
+Stride=0 blocks, Stripe width=0 blocks
+15228928 inodes, 60915456 blocks
+3045772 blocks (5.00%) reserved for the super user
+First data block=0
+Maximum filesystem blocks=4294967296
+1859 block groups
+32768 blocks per group, 32768 fragments per group
+8192 inodes per group
+Superblock backups stored on blocks: 
+	32768, 98304, 163840, 229376, 294912, 819200, 884736, 1605632, 2654208, 
+	4096000, 7962624, 11239424, 20480000, 23887872
+
+Allocating group tables:    0/1859         done                            
+Writing inode tables:    0/1859         done                            
+Creating journal (32768 blocks): done
+Writing superblocks and filesystem accounting information:    0/1859         done
+
+tune2fs 1.42.9 (4-Feb-2014)
+Setting maximal mount count to -1
+Setting interval between checks to 0 seconds
+**MSTPSH** ext4 was successfully formatted.
+**MSTPSH** Mounting ext4 filesystem...
+mount -t ext4  /dev/sdc1 /test/root 
+**MSTPSH** ext4 was successfully mounted
+CPUFREQ = na
+**MSTPSH** CPU frequency is not applicable according to config...
+**MSTPSH** Dirty ratio is kept default according to config...
+**MSTPSH** System was successfully set up.
+
+COMPLETED BENCHMARK (SETUP): ext4-sdc1-noop-ext4-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec EPOCH: 1 / 1 THREAD 1 / 1 SCRIPT: ./main-setup.sh sdc1 noop none SET_IOSCHED_FIRST_EPOCH ext4 FORMAT_FIRST_EPOCH na na "none" none 4096 "" ""
+
+
+STARTING BENCHMARK (EXEC): ext4-sdc1-noop-ext4-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec  EPOCH: 1 / 1 THREAD: 1 / 1 SCRIPT: ./main.sh dbserver-1wr-10rd-10fls-10mfsz 100 100 yes "lcl" bench "/root/vass/linux-kernels/"
+
+**MSH** Workload id: dbserver
+**MSH** Workload parameters:
+**MSH**  threads
+**MSH** 10 files
+**MSH** Generated .f file:
+define fileset name=datafiles,path=/test/root,size=10m,entries=10,dirwidth=1024,prealloc=100,cached=0
+define fileset name=logfile,path=/test/root,size=10m,entries=1,dirwidth=1024,prealloc=100,cached=0
+
+define process name=lgwr,instances=1
+{
+  thread name=lgwr,memsize=1m,useism
+  {
+    flowop aiowrite name=lg-write,filesetname=logfile,
+        iosize=256k,random,directio=0,dsync
+    flowop aiowait name=lg-aiowait
+    flowop semblock name=lg-block,value=3200,highwater=1000
+  }
+}
+# Define database writer processes
+define process name=dbwr,instances=1
+{
+  thread name=dbwr,memsize=1m,useism
+  {
+    flowop aiowrite name=dbwrite-a,filesetname=datafiles,
+        iosize=2k,workingset=0,random,iters=100,opennext,directio=0,dsync
+    flowop hog name=dbwr-hog,value=10000
+    flowop semblock name=dbwr-block,value=1000,highwater=2000
+    flowop aiowait name=dbwr-aiowait
+  }
+}
+
+define process name=shadow,instances=10
+{
+  thread name=shadow,memsize=1m,useism
+  {
+    flowop read name=shadowread,filesetname=datafiles,
+      iosize=2k,workingset=0,random,opennext,directio=0
+    flowop hog name=shadowhog,value=5
+    flowop sempost name=shadow-post-lg,value=1,target=lg-block,blocking
+    flowop sempost name=shadow-post-dbwr,value=1,target=dbwr-block,blocking
+    flowop eventlimit name=random-rate
+  }
+}
+create fileset
+system "sync"
+system "echo 3 > /proc/sys/vm/drop_caches"
+psrun -100 100
+**MSH** Running Filebench
+Filebench Version 1.4.9.1
+ 6584: 0.000: Allocated 174MB of shared memory
+ 6584: 0.001: Populating and pre-allocating filesets
+ 6584: 0.001: logfile populated: 1 files, avg. dir. width = 0, avg. dir. depth = 0.0, 1024 leafdirs, 10.000MB total size
+ 6584: 0.001: Removing logfile tree (if exists)
+ 6584: 0.003: Pre-allocating directories in logfile tree
+ 6584: 0.003: Pre-allocating files in logfile tree
+ 6584: 0.014: Pre-allocated 1 of 1 files in logfile in 1 seconds
+ 6584: 0.014: datafiles populated: 10 files, avg. dir. width = 0, avg. dir. depth = 0.3, 1024 leafdirs, 100.000MB total size
+ 6584: 0.014: Removing datafiles tree (if exists)
+ 6584: 0.017: Pre-allocating directories in datafiles tree
+ 6584: 0.017: Pre-allocating files in datafiles tree
+ 6584: 0.089: Pre-allocated 10 of 10 files in datafiles in 1 seconds
+ 6584: 0.089: Waiting for pre-allocation to finish (in case of a parallel pre-allocation)
+ 6584: 0.089: Population and pre-allocation of filesets completed
+ 6584: 0.089: Running 'sync'
+ 6584: 1.075: Running 'echo 3 > /proc/sys/vm/drop_caches'
+ 6584: 1.095: Attempting to create fileset more than once, ignoring
+ 6594: 1.095: Starting 10 shadow instances
+ 6594: 1.096: Starting 1 dbwr instances
+ 6594: 1.096: Starting 1 lgwr instances
+ 6604: 1.267: Starting 1 shadow threads
+ 6603: 1.267: Starting 1 shadow threads
+ 6595: 1.267: Starting 1 shadow threads
+ 6601: 1.267: Starting 1 shadow threads
+ 6597: 1.267: Starting 1 shadow threads
+ 6600: 1.267: Starting 1 shadow threads
+ 6602: 1.267: Starting 1 shadow threads
+ 6599: 1.268: Starting 1 shadow threads
+ 6596: 1.268: Starting 1 shadow threads
+ 6598: 1.268: Starting 1 shadow threads
+ 6606: 1.268: Starting 1 lgwr threads
+ 6605: 1.268: Starting 1 dbwr threads
+ 6584: 10.270: Waiting for pid 6606 thread lgwr-1
+ 6584: 11.270: Waiting for pid 6606 thread lgwr-1
+ 6584: 20.271: Waiting for pid 6605 thread dbwr-1
+ 6584: 21.271: Waiting for pid 6605 thread dbwr-1
+ 6584: 30.273: Waiting for pid 6604 thread shadow-1
+ 6584: 31.273: Waiting for pid 6604 thread shadow-1
+ 6584: 40.274: Waiting for pid 6603 thread shadow-1
+ 6584: 41.274: Waiting for pid 6603 thread shadow-1
+ 6584: 50.276: Waiting for pid 6602 thread shadow-1
+ 6584: 51.276: Waiting for pid 6602 thread shadow-1
+ 6584: 60.277: Waiting for pid 6601 thread shadow-1
+ 6584: 61.277: Waiting for pid 6601 thread shadow-1
+ 6584: 70.279: Waiting for pid 6600 thread shadow-1
+ 6584: 71.279: Waiting for pid 6600 thread shadow-1
+ 6584: 80.280: Waiting for pid 6599 thread shadow-1
+ 6584: 81.280: Waiting for pid 6599 thread shadow-1
+ 6584: 90.282: Waiting for pid 6598 thread shadow-1
+ 6584: 91.282: Waiting for pid 6598 thread shadow-1
+ 6584: 100.283: Waiting for pid 6597 thread shadow-1
+ 6584: 101.283: Waiting for pid 6597 thread shadow-1
+ 6584: 110.285: Waiting for pid 6596 thread shadow-1
+ 6584: 111.285: Waiting for pid 6596 thread shadow-1
+ 6584: 120.286: Waiting for pid 6595 thread shadow-1
+ 6584: 121.287: Waiting for pid 6595 thread shadow-1
+ 6584: 122.287: Creating 12582912 bytes of ISM Shared Memory...
+ 6584: 122.287: Allocated 12582912 bytes of ISM Shared Memory... at 7fffea76f000
+ 6584: 122.287: Running...
+ 6584: 222.301: Run took 100 seconds...
+ 6584: 222.302: Per-Operation Breakdown
+random-rate          0ops        0ops/s   0.0mb/s      0.0ms/op        0us/op-cpu [0ms - 0ms]
+shadow-post-dbwr     547517ops     5474ops/s   0.0mb/s      0.1ms/op       17us/op-cpu [0ms - 359ms]
+shadow-post-lg       547517ops     5474ops/s   0.0mb/s      0.0ms/op       17us/op-cpu [0ms - 24ms]
+shadowhog            547517ops     5474ops/s   0.0mb/s      0.0ms/op       16us/op-cpu [0ms - 12ms]
+shadowread           547617ops     5475ops/s  10.7mb/s      1.5ms/op       21us/op-cpu [0ms - 610ms]
+dbwr-aiowait         545ops        5ops/s   0.0mb/s      1.8ms/op     1138us/op-cpu [0ms - 38ms]
+dbwr-block           546ops        5ops/s   0.0mb/s    120.5ms/op      879us/op-cpu [0ms - 3824ms]
+dbwr-hog             546ops        5ops/s   0.0mb/s      0.0ms/op       37us/op-cpu [0ms - 0ms]
+dbwrite-a            54610ops      546ops/s   1.1mb/s      0.0ms/op       29us/op-cpu [0ms - 12ms]
+lg-block             171ops        2ops/s   0.0mb/s    582.1ms/op      175us/op-cpu [110ms - 11356ms]
+lg-aiowait           172ops        2ops/s   0.0mb/s      0.0ms/op       58us/op-cpu [0ms - 0ms]
+lg-write             173ops        2ops/s   0.4mb/s      2.0ms/op        0us/op-cpu [0ms - 335ms]
+ 6584: 222.302: IO Summary: 603117 ops, 6030.300 ops/s, (5475/548 r/w),  12.2mb/s,    138us cpu/op,   1.5ms latency
+ 6584: 222.302: Shutting down processes
+ 6584: 223.436: Deleting ISM...
+**MSH*** Filebench run is over.
+
+COMPLETED BENCHMARK (EXEC): ext4-sdc1-noop-ext4-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec EPOCH: 1 / 1 THREAD 1 / 1 SCRIPT: ./main.sh dbserver-1wr-10rd-10fls-10mfsz 100 100 yes "lcl" bench "/root/vass/linux-kernels/"
+
+
+STARTING BENCHMARK (CLEANUP): ext4-sdc1-noop-ext4-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec  EPOCH: 1 / 1 THREAD: 1 / 1 SCRIPT: ./cleanup.sh sdc1 ext4
+
+/dev/sdc1
+**MSTPSH** /dev/sdc1 is mounted, trying to unmount...
+**MSTPSH** /dev/sdc1 was successfully unmounted.
+
+COMPLETED BENCHMARK (CLEANUP): ext4-sdc1-noop-ext4-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec EPOCH: 1 / 1 THREAD 1 / 1 SCRIPT: ./cleanup.sh sdc1 ext4
+

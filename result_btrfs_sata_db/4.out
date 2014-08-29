@@ -1,0 +1,171 @@
+
+STARTING BENCHMARK (SETUP): btrfs-sdc1-noop-btrfs-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec  EPOCH: 1 / 1 THREAD: 1 / 1 SCRIPT: ./main-setup.sh sdc1 noop none SET_IOSCHED_FIRST_EPOCH btrfs FORMAT_FIRST_EPOCH na na "none" none 4096 "" ""
+
+**MSTPSH** BLOCKSIZE enabled: Will format fs with 4096 as blocksize
+BLKOPT = -s 4096
+**MSTPSH** Setting up the system...
+**MPSTPSH** Setting noop I/O scheduler...
+**MPSTPSH** noop I/O scheduler was set successfully.
+**MSTPSH** Formatting btrfs filesystem...
+mkfs.btrfs -f -s 4096  /dev/sdc1
+Turning ON incompat feature 'extref': increased hardlink limit per file to 65536
+
+WARNING! - Btrfs v3.12 IS EXPERIMENTAL
+WARNING! - see http://btrfs.wiki.kernel.org before using
+
+fs created label (null) on /dev/sdc1
+	nodesize 16384 leafsize 16384 sectorsize 4096 size 232.37GiB
+Btrfs v3.12
+Formatted with BTRFS
+**MSTPSH** btrfs was successfully formatted.
+**MSTPSH** Mounting btrfs filesystem...
+mount -t btrfs  /dev/sdc1 /test/root 
+**MSTPSH** btrfs was successfully mounted
+CPUFREQ = na
+**MSTPSH** CPU frequency is not applicable according to config...
+**MSTPSH** Dirty ratio is kept default according to config...
+**MSTPSH** System was successfully set up.
+
+COMPLETED BENCHMARK (SETUP): btrfs-sdc1-noop-btrfs-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec EPOCH: 1 / 1 THREAD 1 / 1 SCRIPT: ./main-setup.sh sdc1 noop none SET_IOSCHED_FIRST_EPOCH btrfs FORMAT_FIRST_EPOCH na na "none" none 4096 "" ""
+
+
+STARTING BENCHMARK (EXEC): btrfs-sdc1-noop-btrfs-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec  EPOCH: 1 / 1 THREAD: 1 / 1 SCRIPT: ./main.sh dbserver-1wr-10rd-10fls-10mfsz 100 100 yes "lcl" bench "/root/vass/linux-kernels/"
+
+**MSH** Workload id: dbserver
+**MSH** Workload parameters:
+**MSH**  threads
+**MSH** 10 files
+**MSH** Generated .f file:
+define fileset name=datafiles,path=/test/root,size=10m,entries=10,dirwidth=1024,prealloc=100,cached=0
+define fileset name=logfile,path=/test/root,size=10m,entries=1,dirwidth=1024,prealloc=100,cached=0
+
+define process name=lgwr,instances=1
+{
+  thread name=lgwr,memsize=1m,useism
+  {
+    flowop aiowrite name=lg-write,filesetname=logfile,
+        iosize=256k,random,directio=0,dsync
+    flowop aiowait name=lg-aiowait
+    flowop semblock name=lg-block,value=3200,highwater=1000
+  }
+}
+# Define database writer processes
+define process name=dbwr,instances=1
+{
+  thread name=dbwr,memsize=1m,useism
+  {
+    flowop aiowrite name=dbwrite-a,filesetname=datafiles,
+        iosize=2k,workingset=0,random,iters=100,opennext,directio=0,dsync
+    flowop hog name=dbwr-hog,value=10000
+    flowop semblock name=dbwr-block,value=1000,highwater=2000
+    flowop aiowait name=dbwr-aiowait
+  }
+}
+
+define process name=shadow,instances=10
+{
+  thread name=shadow,memsize=1m,useism
+  {
+    flowop read name=shadowread,filesetname=datafiles,
+      iosize=2k,workingset=0,random,opennext,directio=0
+    flowop hog name=shadowhog,value=5
+    flowop sempost name=shadow-post-lg,value=1,target=lg-block,blocking
+    flowop sempost name=shadow-post-dbwr,value=1,target=dbwr-block,blocking
+    flowop eventlimit name=random-rate
+  }
+}
+create fileset
+system "sync"
+system "echo 3 > /proc/sys/vm/drop_caches"
+psrun -100 100
+**MSH** Running Filebench
+Filebench Version 1.4.9.1
+27049: 0.000: Allocated 174MB of shared memory
+27049: 0.001: Populating and pre-allocating filesets
+27049: 0.001: logfile populated: 1 files, avg. dir. width = 0, avg. dir. depth = 0.0, 1024 leafdirs, 10.000MB total size
+27049: 0.001: Removing logfile tree (if exists)
+27049: 0.003: Pre-allocating directories in logfile tree
+27049: 0.003: Pre-allocating files in logfile tree
+27049: 0.007: Pre-allocated 1 of 1 files in logfile in 1 seconds
+27049: 0.007: datafiles populated: 10 files, avg. dir. width = 0, avg. dir. depth = 0.3, 1024 leafdirs, 100.000MB total size
+27049: 0.007: Removing datafiles tree (if exists)
+27049: 0.009: Pre-allocating directories in datafiles tree
+27049: 0.009: Pre-allocating files in datafiles tree
+27049: 0.043: Pre-allocated 10 of 10 files in datafiles in 1 seconds
+27049: 0.043: Waiting for pre-allocation to finish (in case of a parallel pre-allocation)
+27049: 0.043: Population and pre-allocation of filesets completed
+27049: 0.043: Running 'sync'
+27049: 1.462: Running 'echo 3 > /proc/sys/vm/drop_caches'
+27049: 1.485: Attempting to create fileset more than once, ignoring
+27059: 1.485: Starting 10 shadow instances
+27059: 1.486: Starting 1 dbwr instances
+27059: 1.486: Starting 1 lgwr instances
+27063: 1.584: Starting 1 shadow threads
+27069: 1.584: Starting 1 shadow threads
+27064: 1.585: Starting 1 shadow threads
+27067: 1.585: Starting 1 shadow threads
+27060: 1.585: Starting 1 shadow threads
+27062: 1.585: Starting 1 shadow threads
+27070: 1.585: Starting 1 dbwr threads
+27071: 1.585: Starting 1 lgwr threads
+27061: 1.585: Starting 1 shadow threads
+27066: 1.586: Starting 1 shadow threads
+27065: 1.586: Starting 1 shadow threads
+27068: 1.586: Starting 1 shadow threads
+27049: 10.588: Waiting for pid 27071 thread lgwr-1
+27049: 11.588: Waiting for pid 27071 thread lgwr-1
+27049: 20.590: Waiting for pid 27070 thread dbwr-1
+27049: 21.590: Waiting for pid 27070 thread dbwr-1
+27049: 30.592: Waiting for pid 27069 thread shadow-1
+27049: 31.592: Waiting for pid 27069 thread shadow-1
+27049: 40.594: Waiting for pid 27068 thread shadow-1
+27049: 41.594: Waiting for pid 27068 thread shadow-1
+27049: 50.596: Waiting for pid 27067 thread shadow-1
+27049: 51.596: Waiting for pid 27067 thread shadow-1
+27049: 60.598: Waiting for pid 27066 thread shadow-1
+27049: 61.599: Waiting for pid 27066 thread shadow-1
+27049: 70.600: Waiting for pid 27065 thread shadow-1
+27049: 71.601: Waiting for pid 27065 thread shadow-1
+27049: 80.603: Waiting for pid 27064 thread shadow-1
+27049: 81.603: Waiting for pid 27064 thread shadow-1
+27049: 90.605: Waiting for pid 27063 thread shadow-1
+27049: 91.605: Waiting for pid 27063 thread shadow-1
+27049: 100.607: Waiting for pid 27062 thread shadow-1
+27049: 101.607: Waiting for pid 27062 thread shadow-1
+27049: 110.609: Waiting for pid 27061 thread shadow-1
+27049: 111.610: Waiting for pid 27061 thread shadow-1
+27049: 120.612: Waiting for pid 27060 thread shadow-1
+27049: 121.612: Waiting for pid 27060 thread shadow-1
+27049: 122.612: Creating 12582912 bytes of ISM Shared Memory...
+27049: 122.612: Allocated 12582912 bytes of ISM Shared Memory... at 7fffea76f000
+27049: 122.612: Running...
+27049: 222.625: Run took 100 seconds...
+27049: 222.625: Per-Operation Breakdown
+random-rate          0ops        0ops/s   0.0mb/s      0.0ms/op        0us/op-cpu [0ms - 0ms]
+shadow-post-dbwr     576381ops     5763ops/s   0.0mb/s      1.3ms/op       16us/op-cpu [0ms - 755ms]
+shadow-post-lg       576382ops     5763ops/s   0.0mb/s      0.0ms/op       16us/op-cpu [0ms - 24ms]
+shadowhog            576383ops     5763ops/s   0.0mb/s      0.0ms/op       16us/op-cpu [0ms - 16ms]
+shadowread           576485ops     5764ops/s  11.2mb/s      0.0ms/op       19us/op-cpu [0ms - 2465ms]
+dbwr-aiowait         574ops        6ops/s   0.0mb/s      0.4ms/op      889us/op-cpu [0ms - 5ms]
+dbwr-block           575ops        6ops/s   0.0mb/s      3.3ms/op      296us/op-cpu [0ms - 43ms]
+dbwr-hog             575ops        6ops/s   0.0mb/s      0.0ms/op       70us/op-cpu [0ms - 0ms]
+dbwrite-a            57510ops      575ops/s   1.1mb/s      0.0ms/op       28us/op-cpu [0ms - 9ms]
+lg-block             180ops        2ops/s   0.0mb/s    554.4ms/op      444us/op-cpu [111ms - 1503ms]
+lg-aiowait           181ops        2ops/s   0.0mb/s      0.0ms/op        0us/op-cpu [0ms - 0ms]
+lg-write             182ops        2ops/s   0.4mb/s      0.0ms/op        0us/op-cpu [0ms - 0ms]
+27049: 222.625: IO Summary: 634932 ops, 6348.498 ops/s, (5764/577 r/w),  12.8mb/s,    241us cpu/op,   0.0ms latency
+27049: 222.625: Shutting down processes
+27049: 224.628: Deleting ISM...
+**MSH*** Filebench run is over.
+
+COMPLETED BENCHMARK (EXEC): btrfs-sdc1-noop-btrfs-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec EPOCH: 1 / 1 THREAD 1 / 1 SCRIPT: ./main.sh dbserver-1wr-10rd-10fls-10mfsz 100 100 yes "lcl" bench "/root/vass/linux-kernels/"
+
+
+STARTING BENCHMARK (CLEANUP): btrfs-sdc1-noop-btrfs-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec  EPOCH: 1 / 1 THREAD: 1 / 1 SCRIPT: ./cleanup.sh sdc1 btrfs
+
+/dev/sdc1
+**MSTPSH** /dev/sdc1 is mounted, trying to unmount...
+**MSTPSH** /dev/sdc1 was successfully unmounted.
+
+COMPLETED BENCHMARK (CLEANUP): btrfs-sdc1-noop-btrfs-naMHz-dbserver-1wr-10rd-10fls-10mfsz-100sec EPOCH: 1 / 1 THREAD 1 / 1 SCRIPT: ./cleanup.sh sdc1 btrfs
+
